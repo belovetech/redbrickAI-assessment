@@ -78,8 +78,8 @@ if __name__ == "__main__":
     # from imgspy_class import imgspy
 
 
-    # async def main():
-    #     print(await imgspy.info('http://via.placeholder.com/1920x1080'))
+    async def main():
+        print(await imgspy.info('http://via.placeholder.com/1920x1080'))
 
 
     asyncio.run(main())
