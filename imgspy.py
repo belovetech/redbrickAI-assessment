@@ -43,17 +43,24 @@ if PY2:
 else:
     from urllib.request import urlopen
 
+import time
 
 @contextlib.contextmanager
 def openstream(input):
     if hasattr(input, 'read'):
         yield input
     elif os.path.isfile(input):
+        start_time = time.perf_counter()
         with open(input, 'rb') as f:
             yield f
+        elapsed = time.perf_counter() - start_time
+        print(f"OPEN file took {elapsed:0.2f} seconds.")
     elif input.startswith('http'):
+        start_time = time.perf_counter()
         with contextlib.closing(urlopen(input)) as f:
             yield f
+        elapsed = time.perf_counter() - start_time
+        print(f"HTTP took {elapsed:0.2f} seconds.")
     elif isinstance(input, str) and input.startswith('data:'):
         parts = input.split(';', 2)
         if len(parts) == 2 and parts[1].startswith('base64,'):

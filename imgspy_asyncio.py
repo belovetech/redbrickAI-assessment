@@ -27,6 +27,7 @@ usage
 """
 import io
 import os
+import sys
 import base64
 import struct
 import asyncio
@@ -37,19 +38,31 @@ __version__ = '0.2.2'
 
 
 async def openstream(input):
-    if hasattr(input, 'read'):
-        return input
-    elif os.path.isfile(input):
-        async with aiofiles.open('filename', mode='r') as f:
-            return io.BytesIO(await f.read())
-    elif input.startswith('http'):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(input) as response:
-                return io.BytesIO(await response.read())
-    elif isinstance(input, str) and input.startswith('data:'):
-        parts = input.split(';', 2)
-        if len(parts) == 2 and parts[1].startswith('base64,'):
-            return io.BytesIO(base64.b64decode(parts[1][7:]))
+    try:
+        if hasattr(input, 'read'):
+            return input
+        elif os.path.isfile(input):
+            start_time = time.perf_counter()
+            async with aiofiles.open(input, mode='rb') as f:
+                res = io.BytesIO(await f.read())
+            elapsed = time.perf_counter() - start_time
+            print(f"OPEN file took {elapsed:0.2f} seconds.")
+            return res
+        elif input.startswith('http'):
+            start_time = time.perf_counter()
+            async with aiohttp.ClientSession() as session:
+                async with session.get(input) as response:
+                    res = io.BytesIO(await response.read())
+            elapsed = time.perf_counter() - start_time
+            print(f"HTTP took {elapsed:0.2f} seconds.")
+            return res
+        elif isinstance(input, str) and input.startswith('data:'):
+            parts = input.split(';', 2)
+            if len(parts) == 2 and parts[1].startswith('base64,'):
+                return io.BytesIO(base64.b64decode(parts[1][7:]))
+    except Exception as e:
+        print(e.me)
+        sys.exit(1)
 
 
 async def info(*input):
@@ -57,34 +70,35 @@ async def info(*input):
     return result
 
 
+import time
+
 async def processor(input):
     stream = await openstream(input)
-    print(type(stream))
-    return await probe(stream)
+    return probe(stream)
 
 
-async def probe(stream):
+
+def probe(stream):
     chunk = stream.read(26)
 
     if chunk.startswith(b'\x89PNG\r\n\x1a\n'):
-        return await probe_png(chunk, stream)
+        return probe_png(chunk, stream)
     elif chunk.startswith(b'GIF89a') or chunk.startswith(b'GIF87a'):
-        return await probe_gif(chunk)
+        return probe_gif(chunk)
     elif chunk.startswith(b'\xff\xd8'):
-        return await probe_jpeg(chunk, stream)
+        return probe_jpeg(chunk, stream)
     elif chunk.startswith(b'\x00\x00\x01\x00') or chunk.startswith(b'\x00\x00\x02\x00'):
-        return await probe_unknown_type(chunk)
+        return probe_unknown_type(chunk)
     elif chunk.startswith(b'BM'):
-        return await probe_bmp(chunk)
+        return probe_bmp(chunk)
     elif chunk.startswith(b'MM\x00\x2a') or chunk.startswith(b'II\x2a\x00'):
-        return await probe_tiff(chunk, stream)
+        return probe_tiff(chunk, stream)
     elif chunk[:4] == b'RIFF' and chunk[8:15] == b'WEBPVP8':
-        return await probe_webp(chunk, stream)
+        return probe_webp(chunk, stream)
     elif chunk.startswith(b'8BPS'):
-        return await probe_psd(chunk)
+        return probe_psd(chunk)
 
-
-async def probe_png(chunk, stream):
+def probe_png(chunk, stream):
     if chunk[12:16] == b'IHDR':
         w, h = struct.unpack(">LL", chunk[16:24])
     elif chunk[12:16] == b'CgBI':
@@ -95,12 +109,12 @@ async def probe_png(chunk, stream):
     return {'type': 'png', 'width': w, 'height': h}
 
 
-async def probe_gif(chunk):
+def probe_gif(chunk):
     w, h = struct.unpack('<HH', chunk[6:10])
     return {'type': 'gif', 'width': w, 'height': h}
 
 
-async def probe_jpeg(chunk, stream):
+def probe_jpeg(chunk, stream):
     start = 2
     data = chunk
     while True:
@@ -114,7 +128,7 @@ async def probe_jpeg(chunk, stream):
         start = start + segment_size + 2
 
 
-async def probe_unknown_type(chunk):
+def probe_unknown_type(chunk):
     img_type = 'ico' if chunk[2:3] == b'\x01' else 'cur'
     num_images = struct.unpack('<H', chunk[4:6])[0]
     w, h = struct.unpack('BB', chunk[6:8])
@@ -123,7 +137,7 @@ async def probe_unknown_type(chunk):
     return {'type': img_type, 'width': w, 'height': h, 'num_images': num_images}
 
 
-async def probe_bmp(chunk):
+def probe_bmp(chunk):
     headersize = struct.unpack("<I", chunk[14:18])[0]
     if headersize == 12:
         w, h = struct.unpack("<HH", chunk[18:22])
@@ -134,7 +148,7 @@ async def probe_bmp(chunk):
     return {'type': 'bmp', 'width': w, 'height': h}
 
 
-async def probe_tiff(chunk, stream):
+def probe_tiff(chunk, stream):
     w, h, orientation = None, None, None
 
     endian = '>' if chunk[0:2] == b'MM' else '<'
@@ -163,7 +177,7 @@ async def probe_tiff(chunk, stream):
     return {'type': 'tiff', 'width': w, 'height': h, 'orientation': orientation}
 
 
-async def probe_webp(chunk, stream):
+def probe_webp(chunk, stream):
     w, h = None, None
     type = chunk[15:16]
     chunk += stream.read(30 - len(chunk))
@@ -180,7 +194,7 @@ async def probe_webp(chunk, stream):
     return {'type': 'webp', 'width': w, 'height': h}
 
 
-async def probe_psd(chunk):
+def probe_psd(chunk):
     h, w = struct.unpack('>LL', chunk[14:22])
     return {'type': 'psd', 'width': w, 'height': h}
 
