@@ -12,6 +12,7 @@ imgspy offers support for a variety of image types, including BMP, CUR, GIF, ICO
 usage
 -----
 ::
+    from imgspy import imgspy
 
     >>> async def main():
         print((await imgspy.info(
@@ -31,8 +32,9 @@ import struct
 import asyncio
 import aiohttp
 import aiofiles
-from aiohttp import ClientError, http_exceptions
 import logging
+from aiohttp import ClientError, http_exceptions
+from typing import List, Coroutine
 
 __version__ = '0.2.2'
 
@@ -363,18 +365,18 @@ class imgspy:
     """Processing multiple image streams concurrently to extract their metadata"""
 
     @classmethod
-    async def info(cls, *input):
+    async def info(cls, *input) -> List[dict]:
         """
         Get the image metadata.
 
         Returns:
-            dict: The image metadata.
+            List[dict]: List of image metadata dictionary.
         """
         tasks = [cls.__processor(i) for i in input]
         return await asyncio.gather(*tasks)
 
     @classmethod
-    async def __processor(cls, input):
+    async def __processor(cls, input) -> List[Coroutine]:
         """
         Process the input source.
         """
