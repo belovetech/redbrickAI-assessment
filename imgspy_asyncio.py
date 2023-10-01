@@ -32,6 +32,7 @@ import base64
 import struct
 import asyncio
 import aiohttp
+from aiohttp import ClientError, http_exceptions
 import aiofiles
 
 __version__ = '0.2.2'
