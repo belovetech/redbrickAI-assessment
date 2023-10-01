@@ -56,7 +56,7 @@ class OpenStream:
         self.__session = None
         self.logger = logging.getLogger(__class__.__name__)
 
-    async def get_stream(self) -> io.BytesIO:
+    async def _get_stream(self) -> io.BytesIO:
         """
         Get an asynchronous byte stream based on the input source.
 
@@ -162,7 +162,7 @@ class Probe(OpenStream):
             dict: The image metadata.
         """
         try:
-            self.stream = await OpenStream(input).get_stream()
+            self.stream = await OpenStream(input)._get_stream()
             self.chunk = self.stream.read(26)
         except Exception as e:
             self.logger.error(f"Error while reading stream: {e}")
@@ -359,10 +359,23 @@ class Probe(OpenStream):
 
 
 
+class imgspy:
+    """Processing multiple image streams concurrently to extract their metadata"""
 
-async def info(*input):
-    return await asyncio.gather(*[processor(i) for i in input])
+    @classmethod
+    async def info(cls, *input):
+        """
+        Get the image metadata.
 
+        Returns:
+            dict: The image metadata.
+        """
+        tasks = [cls.__processor(i) for i in input]
+        return await asyncio.gather(*tasks)
 
-async def processor(input):
-    return await Probe().get_info(input)
+    @classmethod
+    async def __processor(cls, input):
+        """
+        Process the input source.
+        """
+        return await Probe().get_info(input)
